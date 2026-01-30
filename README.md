@@ -8,12 +8,12 @@ System packages (Ubuntu/Mint):
 
 - `ripgrep-all` (`rga`)
 - `poppler-utils` (`pdftotext`, `pdftoppm`)
-- `wezterm` (for inline image rendering)
-- `chafa` (optional fallback renderer)
+- `wezterm` (recommended terminal with inline image support)
 
 Python packages:
 
 - `textual`
+- `textual-image`
 - `rich`
 
 ## Install
@@ -49,17 +49,6 @@ Right pane (PDF preview):
 - `k`: previous page
 - `n`: next match
 - `N`: previous match
-
-## Renderer selection
-
-By default, the app tries `wezterm imgcat` for inline images. If it fails, outputs non-UTF8 data, or `wezterm` is unavailable, it falls back to `chafa`.
-
-You can force a mode with:
-
-```bash
-PDFGREPUI_RENDERER=wezterm pdfgrepui "term" .
-PDFGREPUI_RENDERER=chafa pdfgrepui "term" .
-```
 
 ## Notes
 

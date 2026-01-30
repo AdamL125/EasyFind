@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Codex" }]
 dependencies = [
   "textual>=0.59.0",
+  "textual-image>=0.7.0",
   "rich>=13.0.0",
 ]
 

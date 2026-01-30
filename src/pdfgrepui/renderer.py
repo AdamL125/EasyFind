@@ -1,12 +1,21 @@
 from __future__ import annotations
 
-import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 from .cache import get_cache_paths, load_meta, save_meta
+
+
+def _find_generated_page(render_dir: Path, page_number: int) -> Path | None:
+    pattern = re.compile(r"page-(\d+)\.png$")
+    for generated in render_dir.glob("page-*.png"):
+        match = pattern.search(generated.name)
+        if not match:
+            continue
+        if int(match.group(1)) == page_number:
+            return generated
+    return None
 
 
 def _render_page_png(pdf_path: Path, page_number: int) -> Path:
@@ -28,9 +37,10 @@ def _render_page_png(pdf_path: Path, page_number: int) -> Path:
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"pdftoppm failed: {result.stderr.strip()}")
-    generated = cache_paths.render_dir / f"page-{page_number}.png"
-    if generated.exists():
-        generated.rename(png_path)
+    generated = _find_generated_page(cache_paths.render_dir, page_number)
+    if generated is None:
+        raise RuntimeError(f"pdftoppm did not generate page {page_number}")
+    generated.rename(png_path)
     meta = load_meta(cache_paths.meta_path)
     meta.setdefault("rendered_pages", []).append(page_number)
     save_meta(cache_paths.meta_path, meta)
@@ -52,10 +62,9 @@ def ensure_render_cache(pdf_path: Path, page_count: int) -> None:
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"pdftoppm failed: {result.stderr.strip()}")
-    pattern = re.compile(r"page-(\d+)\\.png$")
     rendered_pages = []
     for generated in cache_paths.render_dir.glob("page-*.png"):
-        match = pattern.search(generated.name)
+        match = re.search(r"page-(\d+)\.png$", generated.name)
         if not match:
             continue
         page_number = int(match.group(1))
@@ -71,49 +80,5 @@ def ensure_render_cache(pdf_path: Path, page_count: int) -> None:
     save_meta(cache_paths.meta_path, meta)
 
 
-def _wezterm_available() -> bool:
-    return shutil.which("wezterm") is not None
-
-
-def _chafa_available() -> bool:
-    return shutil.which("chafa") is not None
-
-
-def _render_with_wezterm(png_path: Path) -> str:
-    command = ["wezterm", "imgcat", str(png_path)]
-    result = subprocess.run(command, capture_output=True, text=False, check=False)
-    if result.returncode != 0:
-        error = result.stderr.decode("utf-8", errors="ignore").strip()
-        raise RuntimeError(error or "wezterm imgcat failed")
-    output = result.stdout
-    if output.startswith(b"\x89PNG"):
-        raise RuntimeError("wezterm imgcat returned raw PNG data")
-    try:
-        return output.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise RuntimeError("wezterm imgcat returned non-UTF8 data") from exc
-
-
-def _render_with_chafa(png_path: Path) -> str:
-    command = ["chafa", str(png_path)]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "chafa failed")
-    return result.stdout
-
-
-def render_page(pdf_path: Path, page_number: int) -> str:
-    png_path = _render_page_png(pdf_path, page_number)
-    preferred = os.environ.get("PDFGREPUI_RENDERER", "").lower()
-    if preferred == "wezterm":
-        return _render_with_wezterm(png_path)
-    if preferred == "chafa":
-        return _render_with_chafa(png_path)
-    if _wezterm_available():
-        try:
-            return _render_with_wezterm(png_path)
-        except RuntimeError:
-            pass
-    if _chafa_available():
-        return _render_with_chafa(png_path)
-    raise RuntimeError("No renderer available (wezterm or chafa)")
+def render_page(pdf_path: Path, page_number: int) -> Path:
+    return _render_page_png(pdf_path, page_number)

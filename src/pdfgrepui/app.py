@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
+from textual_image.widget import Image
 
 from .indexer import index_pdf
 from .models import PdfDoc, SearchMatch
@@ -15,8 +16,33 @@ from .renderer import render_page
 from .search import find_candidate_pdfs
 
 
-class PreviewPane(Static):
-    pass
+class PreviewPane(Container):
+    def compose(self) -> ComposeResult:
+        yield Label("", id="preview-message")
+
+    def show_message(self, message: str) -> None:
+        label = self.query_one("#preview-message", Label)
+        for image in self.query(Image):
+            image.display = False
+        label.display = True
+        label.update(message)
+
+    def show_image(self, image_path: Path) -> None:
+        label = self.query_one("#preview-message", Label)
+        label.display = False
+        images = list(self.query(Image))
+        if images:
+            image = images[0]
+            image.display = True
+            if hasattr(image, "set_image"):
+                image.set_image(str(image_path))
+            elif hasattr(image, "path"):
+                image.path = str(image_path)
+                image.refresh()
+            else:
+                image.update(str(image_path))
+            return
+        self.mount(Image(str(image_path), id="preview-image"))
 
 
 class PdfGrepApp(App):
@@ -92,7 +118,7 @@ class PdfGrepApp(App):
             self.results_list.index = 0
             await self._jump_to_match(0)
         else:
-            self.preview.update("No matches found.")
+            self.preview.show_message("No matches found.")
         self._update_status()
 
     def _index_documents(self) -> Tuple[List[PdfDoc], List[SearchMatch]]:
@@ -191,13 +217,13 @@ class PdfGrepApp(App):
         if self.current_pdf_index is None or self.current_page is None:
             return
         doc = self.documents[self.current_pdf_index]
-        self.preview.update("Rendering...")
+        self.preview.show_message("Rendering...")
         try:
             output = await asyncio.to_thread(render_page, doc.path, self.current_page)
         except Exception as exc:
-            self.preview.update(f"Render failed: {exc}")
+            self.preview.show_message(f"Render failed: {exc}")
             return
-        self.preview.update(output)
+        self.preview.show_image(output)
 
     async def _next_match(self) -> None:
         if self.current_match_index is None:
