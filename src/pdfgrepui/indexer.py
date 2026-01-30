@@ -7,6 +7,7 @@ from typing import List, Tuple
 
 from .cache import get_cache_paths, is_cache_valid, load_meta, save_meta
 from .models import PdfDoc, SearchMatch
+from .renderer import ensure_render_cache
 
 
 def _extract_page_text(pdf_path: Path, page_number: int, cache_dir: Path) -> str:
@@ -89,4 +90,5 @@ def index_pdf(pdf_path: Path, query: str, regex: bool) -> PdfDoc:
                     context=snippet,
                 )
             )
+    ensure_render_cache(pdf_path, page_count)
     return PdfDoc(path=pdf_path, page_count=page_count, matches=matches)
