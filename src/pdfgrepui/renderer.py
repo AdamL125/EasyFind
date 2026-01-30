@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
-import re
-from typing import Optional
 
 from .cache import get_cache_paths, load_meta, save_meta
 
@@ -82,10 +81,17 @@ def _chafa_available() -> bool:
 
 def _render_with_wezterm(png_path: Path) -> str:
     command = ["wezterm", "imgcat", str(png_path)]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    result = subprocess.run(command, capture_output=True, text=False, check=False)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "wezterm imgcat failed")
-    return result.stdout
+        error = result.stderr.decode("utf-8", errors="ignore").strip()
+        raise RuntimeError(error or "wezterm imgcat failed")
+    output = result.stdout
+    if output.startswith(b"\x89PNG"):
+        raise RuntimeError("wezterm imgcat returned raw PNG data")
+    try:
+        return output.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RuntimeError("wezterm imgcat returned non-UTF8 data") from exc
 
 
 def _render_with_chafa(png_path: Path) -> str:

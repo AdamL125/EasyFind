@@ -52,7 +52,7 @@ Right pane (PDF preview):
 
 ## Renderer selection
 
-By default, the app tries `wezterm imgcat` for inline images. If it fails or `wezterm` is unavailable, it falls back to `chafa`.
+By default, the app tries `wezterm imgcat` for inline images. If it fails, outputs non-UTF8 data, or `wezterm` is unavailable, it falls back to `chafa`.
 
 You can force a mode with:
 
