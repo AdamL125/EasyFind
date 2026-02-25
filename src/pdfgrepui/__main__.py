@@ -1,3 +1,5 @@
+"""Module entrypoint for `python -m pdfgrepui`."""
+
 from .app import main
 
 

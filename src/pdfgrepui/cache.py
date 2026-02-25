@@ -1,3 +1,5 @@
+"""Cache keying and metadata helpers shared by indexing and rendering modules."""
+
 from __future__ import annotations
 
 import hashlib
@@ -11,6 +13,8 @@ CACHE_ROOT = Path.home() / ".cache" / "pdfgrepui"
 
 @dataclass
 class CachePaths:
+    """Filesystem locations for one PDF's cached artifacts."""
+
     root: Path
     text_dir: Path
     render_dir: Path
@@ -18,10 +22,16 @@ class CachePaths:
 
 
 def _hash_path(path: Path) -> str:
+    """Build stable cache key from resolved absolute PDF path."""
     return hashlib.sha1(str(path.resolve()).encode("utf-8")).hexdigest()
 
 
 def get_cache_paths(pdf_path: Path) -> CachePaths:
+    """Return and create cache directories/metadata path for a PDF.
+
+    Side effects:
+        Creates cache directories if missing.
+    """
     cache_key = _hash_path(pdf_path)
     root = CACHE_ROOT / cache_key
     text_dir = root / "texts"
@@ -34,6 +44,7 @@ def get_cache_paths(pdf_path: Path) -> CachePaths:
 
 
 def load_meta(meta_path: Path) -> Dict[str, Any]:
+    """Load cache metadata JSON; return empty dict when missing/invalid."""
     if not meta_path.exists():
         return {}
     try:
@@ -43,10 +54,12 @@ def load_meta(meta_path: Path) -> Dict[str, Any]:
 
 
 def save_meta(meta_path: Path, data: Dict[str, Any]) -> None:
+    """Write cache metadata JSON file."""
     meta_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def is_cache_valid(meta: Dict[str, Any], pdf_path: Path) -> bool:
+    """Return True when cache metadata corresponds to current PDF mtime."""
     if not meta:
         return False
     try:
@@ -56,5 +69,6 @@ def is_cache_valid(meta: Dict[str, Any], pdf_path: Path) -> bool:
 
 
 def invalidate_cache(cache_paths: CachePaths) -> None:
+    """Delete metadata file for a cached PDF, forcing metadata rebuild next run."""
     if cache_paths.meta_path.exists():
         cache_paths.meta_path.unlink()

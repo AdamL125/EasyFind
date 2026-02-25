@@ -1,3 +1,5 @@
+"""Candidate discovery: locate PDFs likely to contain the query string."""
+
 from __future__ import annotations
 
 import subprocess
@@ -6,6 +8,13 @@ from typing import List
 
 
 def find_candidate_pdfs(query: str, root: Path) -> List[Path]:
+    """Return sorted candidate PDF paths by delegating to ripgrep-all (`rga`).
+
+    Side effects:
+        Executes external `rga`.
+    """
+    # --- Search pipeline ---
+    # NOTE: this prefilter narrows expensive per-page indexing to PDFs that already match.
     command = [
         "rga",
         "--files-with-matches",

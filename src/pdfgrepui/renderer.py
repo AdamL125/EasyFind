@@ -1,3 +1,5 @@
+"""PDF page rendering helpers backed by on-disk PNG cache."""
+
 from __future__ import annotations
 
 import re
@@ -8,6 +10,7 @@ from .cache import get_cache_paths, load_meta, save_meta
 
 
 def _find_generated_page(render_dir: Path, page_number: int) -> Path | None:
+    """Find pdftoppm's generated page file for one page number."""
     pattern = re.compile(r"page-(\d+)\.png$")
     for generated in render_dir.glob("page-*.png"):
         match = pattern.search(generated.name)
@@ -19,6 +22,12 @@ def _find_generated_page(render_dir: Path, page_number: int) -> Path | None:
 
 
 def _render_page_png(pdf_path: Path, page_number: int) -> Path:
+    """Render one page to PNG (or reuse cache) and return file path.
+
+    Side effects:
+        Reads/writes render cache and metadata.
+        Executes external `pdftoppm`.
+    """
     cache_paths = get_cache_paths(pdf_path)
     png_path = cache_paths.render_dir / f"page_{page_number}.png"
     if png_path.exists():
@@ -48,6 +57,13 @@ def _render_page_png(pdf_path: Path, page_number: int) -> Path:
 
 
 def ensure_render_cache(pdf_path: Path, page_count: int) -> None:
+    """Ensure PNG cache exists for every page in a PDF.
+
+    Side effects:
+        Executes external `pdftoppm`.
+        Reads/writes render directory and metadata file.
+    """
+    # NOTE: This intentionally pre-renders all pages once to make preview navigation smooth.
     cache_paths = get_cache_paths(pdf_path)
     expected = {cache_paths.render_dir / f"page_{n}.png" for n in range(1, page_count + 1)}
     if all(path.exists() for path in expected):
@@ -81,4 +97,5 @@ def ensure_render_cache(pdf_path: Path, page_count: int) -> None:
 
 
 def render_page(pdf_path: Path, page_number: int) -> Path:
+    """Public renderer API used by the UI preview pane."""
     return _render_page_png(pdf_path, page_number)

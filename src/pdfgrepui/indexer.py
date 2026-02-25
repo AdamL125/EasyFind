@@ -1,3 +1,5 @@
+"""PDF text indexing pipeline: page extraction, matching, and snippet creation."""
+
 from __future__ import annotations
 
 import re
@@ -11,6 +13,12 @@ from .renderer import ensure_render_cache
 
 
 def _extract_page_text(pdf_path: Path, page_number: int, cache_dir: Path) -> str:
+    """Return text for one PDF page, using cached extraction when available.
+
+    Side effects:
+        Reads/writes per-page text cache files.
+        Calls external `pdftotext` when cache is missing.
+    """
     cache_path = cache_dir / f"page_{page_number}.txt"
     if cache_path.exists():
         return cache_path.read_text(encoding="utf-8", errors="ignore")
@@ -31,6 +39,7 @@ def _extract_page_text(pdf_path: Path, page_number: int, cache_dir: Path) -> str
 
 
 def _count_pages(pdf_path: Path) -> int:
+    """Return PDF page count by calling `pdfinfo`."""
     command = ["pdfinfo", str(pdf_path)]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
@@ -42,6 +51,7 @@ def _count_pages(pdf_path: Path) -> int:
 
 
 def _find_matches(text: str, query: str, regex: bool) -> List[Tuple[int, int]]:
+    """Find all match spans in `text` using regex or case-insensitive literal search."""
     if regex:
         pattern = re.compile(query, re.IGNORECASE)
         return [(m.start(), m.end()) for m in pattern.finditer(text)]
@@ -59,6 +69,7 @@ def _find_matches(text: str, query: str, regex: bool) -> List[Tuple[int, int]]:
 
 
 def _context_snippet(text: str, start: int, end: int, radius: int = 80) -> str:
+    """Build a compact single-line context snippet around one match span."""
     left = max(start - radius, 0)
     right = min(end + radius, len(text))
     snippet = text[left:right].strip().replace("\n", " ")
@@ -66,6 +77,22 @@ def _context_snippet(text: str, start: int, end: int, radius: int = 80) -> str:
 
 
 def index_pdf(pdf_path: Path, query: str, regex: bool) -> PdfDoc:
+    """Index one PDF and return all matches plus metadata.
+
+    Args:
+        pdf_path: PDF file to index.
+        query: Search query string.
+        regex: Whether query should be treated as regex.
+
+    Returns:
+        PdfDoc with page count and ordered matches.
+
+    Side effects:
+        Reads/writes cache metadata and per-page text cache.
+        Calls external `pdfinfo`, `pdftotext`, and rendering cache warmup.
+    """
+    # --- Search pipeline ---
+    # NOTE: cache validity is based on source PDF mtime to avoid re-indexing unchanged files.
     cache_paths = get_cache_paths(pdf_path)
     meta = load_meta(cache_paths.meta_path)
     if not is_cache_valid(meta, pdf_path):
