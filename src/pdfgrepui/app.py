@@ -346,7 +346,6 @@ class PdfGrepApp(App):
         if self.current_pdf_index is None or self.current_page is None:
             return
         doc = self.documents[self.current_pdf_index]
-        self.preview.show_message("Rendering...")
         try:
             output = await asyncio.to_thread(render_page, doc.path, self.current_page)
         except Exception as exc:
