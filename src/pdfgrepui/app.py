@@ -155,14 +155,13 @@ class PdfGrepApp(App):
         return documents, matches
 
     def _populate_results(self) -> None:
-        """Populate the left results list from flattened matches."""
+        """Populate the left results list from documents with matches."""
         self.results_list.clear()
-        if not self.matches:
+        if not self.documents:
             self.results_list.append(ListItem(Label("No matches")))
             return
-        for match in self.matches:
-            label = f"{match.pdf_path.name} p{match.page_number}: {match.context}"
-            self.results_list.append(ListItem(Label(label)))
+        for doc in self.documents:
+            self.results_list.append(ListItem(Label(doc.path.name)))
 
     def _focus_left(self) -> None:
         """Move keyboard focus to results list pane."""
@@ -219,12 +218,22 @@ class PdfGrepApp(App):
 
     async def _jump_to_selected(self) -> None:
         """Jump preview context to the currently selected row in results."""
-        if not self.matches:
+        if not self.documents:
             return
         index = self.results_list.index
         if index is None:
             return
-        await self._jump_to_match(index)
+        await self._jump_to_document(index)
+
+    async def _jump_to_document(self, doc_index: int) -> None:
+        """Select a document row and jump to its first match."""
+        if doc_index < 0 or doc_index >= len(self.documents):
+            return
+        doc = self.documents[doc_index]
+        if not doc.matches:
+            return
+        first_match = doc.matches[0]
+        await self._jump_to_match(self.matches.index(first_match))
 
     async def _jump_to_match(self, match_index: int) -> None:
         """Select match by flat index and render its corresponding page."""
@@ -234,6 +243,8 @@ class PdfGrepApp(App):
         match = self.matches[match_index]
         self.current_page = match.page_number
         self.current_pdf_index = self._doc_index_for_match(match)
+        if self.current_pdf_index is not None:
+            self.results_list.index = self.current_pdf_index
         await self._render_current_page()
         self._update_status()
 
@@ -317,6 +328,7 @@ class PdfGrepApp(App):
             first_match = doc.matches[0]
             self.current_match_index = self.matches.index(first_match)
             self.current_page = first_match.page_number
+            self.results_list.index = self.current_pdf_index
         else:
             self.current_page = 1
 
@@ -326,6 +338,7 @@ class PdfGrepApp(App):
             last_match = doc.matches[-1]
             self.current_match_index = self.matches.index(last_match)
             self.current_page = last_match.page_number
+            self.results_list.index = self.current_pdf_index
         else:
             self.current_page = doc.page_count
 
