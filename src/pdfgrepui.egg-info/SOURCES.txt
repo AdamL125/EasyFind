@@ -1,0 +1,17 @@
+LICENSE
+README.md
+pyproject.toml
+src/pdfgrepui/__init__.py
+src/pdfgrepui/__main__.py
+src/pdfgrepui/app.py
+src/pdfgrepui/cache.py
+src/pdfgrepui/indexer.py
+src/pdfgrepui/models.py
+src/pdfgrepui/renderer.py
+src/pdfgrepui/search.py
+src/pdfgrepui.egg-info/PKG-INFO
+src/pdfgrepui.egg-info/SOURCES.txt
+src/pdfgrepui.egg-info/dependency_links.txt
+src/pdfgrepui.egg-info/entry_points.txt
+src/pdfgrepui.egg-info/requires.txt
+src/pdfgrepui.egg-info/top_level.txt

@@ -11,7 +11,7 @@ import textual_image.renderable  # must be imported before Textual app starts
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
-from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
+from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 from textual_image.widget import Image
 
 from .indexer import index_pdf
@@ -76,12 +76,36 @@ class PdfGrepApp(App):
         height: auto;
         border: tall $secondary;
     }
+
+    #search-overlay {
+        layer: overlay;
+        width: 100%;
+        height: 100%;
+        display: none;
+        align: center top;
+        padding: 3 0 0 0;
+        background: $surface 40%;
+    }
+
+    #search-modal {
+        width: 70%;
+        max-width: 84;
+        height: auto;
+        border: tall $accent;
+        background: $surface;
+        padding: 0 1;
+    }
+
+    #search-input {
+        width: 100%;
+    }
     """
 
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("h", "focus_left", "Focus Left"),
         ("l", "focus_right", "Focus Right"),
+        ("/", "open_search", "Search"),
     ]
 
     def __init__(self, query: str, root: Path, regex: bool) -> None:
@@ -105,6 +129,11 @@ class PdfGrepApp(App):
         self.results_list = ListView(id="results")
         self.preview = PreviewPane(id="preview")
         self.status = Static(id="status")
+        self.search_overlay = Container(
+            Container(Input(placeholder="Enter new search and press Enter", id="search-input"), id="search-modal"),
+            id="search-overlay",
+        )
+        self.search_open = False
 
     def compose(self) -> ComposeResult:
         """Compose the two-pane layout plus status/footer widgets."""
@@ -113,6 +142,7 @@ class PdfGrepApp(App):
             yield self.results_list
             yield self.preview
         yield self.status
+        yield self.search_overlay
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -185,6 +215,15 @@ class PdfGrepApp(App):
 
     async def on_key(self, event) -> None:  # type: ignore[override]
         """Handle pane-specific key bindings for navigation and match jumping."""
+        if self.search_open:
+            if event.key == "escape":
+                self._hide_search_overlay()
+                event.stop()
+            return
+        if event.key in ("/", "slash"):
+            self.action_open_search()
+            event.stop()
+            return
         if event.key == "enter" and self.focus_pane == "left":
             await self._jump_to_selected()
             event.stop()
@@ -215,6 +254,49 @@ class PdfGrepApp(App):
                 await self._previous_match()
                 event.stop()
                 return
+
+    def action_open_search(self) -> None:
+        """Show centered search overlay and focus input."""
+        self.search_open = True
+        self.search_overlay.display = True
+        search_input = self.query_one("#search-input", Input)
+        search_input.value = self.query
+        search_input.focus()
+        search_input.cursor_position = len(search_input.value)
+
+    def _hide_search_overlay(self) -> None:
+        """Hide search overlay and return focus to the active pane."""
+        self.search_open = False
+        self.search_overlay.display = False
+        if self.focus_pane == "right":
+            self.preview.focus()
+        else:
+            self.results_list.focus()
+        self._update_status()
+
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Submit in overlay input reruns the search and closes overlay."""
+        if event.input.id != "search-input":
+            return
+        new_query = event.value.strip()
+        self._hide_search_overlay()
+        if not new_query:
+            self.status.update("Search unchanged: query is empty.")
+            return
+        self.query = new_query
+        await self._start_search()
+
+    async def _start_search(self) -> None:
+        """Clear current state and perform a new search with current query."""
+        self.status.update(f"Searching for: {self.query}")
+        self.results_list.clear()
+        self.preview.show_message("Searching...")
+        self.documents = []
+        self.matches = []
+        self.current_match_index = None
+        self.current_pdf_index = None
+        self.current_page = None
+        await self._start_indexing()
 
     async def _jump_to_selected(self) -> None:
         """Jump preview context to the currently selected row in results."""
