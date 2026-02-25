@@ -5,6 +5,8 @@ import asyncio
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+import textual_image.renderable  # must be imported before Textual app starts
+
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
@@ -19,31 +21,76 @@ from .search import find_candidate_pdfs
 class PreviewPane(Container):
     def compose(self) -> ComposeResult:
         yield Label("", id="preview-message")
+        # Mount once; update by setting .image
+        yield Image(id="preview-image")
 
     def show_message(self, message: str) -> None:
         label = self.query_one("#preview-message", Label)
-        for image in self.query(Image):
-            image.display = False
-        label.display = True
+        img = self.query_one("#preview-image", Image)
+
         label.update(message)
+        label.display = True
+        img.display = False
 
     def show_image(self, image_path: Path) -> None:
         label = self.query_one("#preview-message", Label)
-        label.display = False
-        images = list(self.query(Image))
-        if images:
-            image = images[0]
-            image.display = True
-            if hasattr(image, "set_image"):
-                image.set_image(str(image_path))
-            elif hasattr(image, "path"):
-                image.path = str(image_path)
-                image.refresh()
-            else:
-                image.update(str(image_path))
-            return
-        self.mount(Image(str(image_path), id="preview-image"))
+        img = self.query_one("#preview-image", Image)
 
+        label.update("")
+        label.display = False
+
+        # Correct way for textual-image: assign to .image (string path)
+        img.image = str(image_path)
+        img.display = True
+#
+# class PreviewPane(Container):
+#     def compose(self) -> ComposeResult:
+#         yield Label("", id="preview-message")
+#
+#     def show_message(self, message: str) -> None:
+#         label = self.query_one("#preview-message", Label)
+#         for image in self.query(Image):
+#             image.display = False
+#         label.display = True
+#         label.update(message)
+#
+    #
+    #
+    # def show_image(self, image_path: Path) -> None:
+    #     # Hide the message label if present
+    #     label = self.query_one("#preview-message", expect_type=Label)
+    #     label.update("")
+    #
+    #     images = self.query("#preview-image")
+    #     if images:
+    #         image = images[0]
+    #         # textual-image Image widgets expose `.path`
+    #         image.path = str(image_path)
+    #         image.refresh()
+    #         return
+    #
+    #     self.mount(Image(str(image_path), id="preview-image"))
+    #
+    #
+
+##
+    # def show_image(self, image_path: Path) -> None:
+    #     label = self.query_one("#preview-message", Label)
+    #     label.display = False
+    #     images = list(self.query(Image))
+    #     if images:
+    #         image = images[0]
+    #         image.display = True
+    #         if hasattr(image, "set_image"):
+    #             image.set_image(str(image_path))
+    #         elif hasattr(image, "path"):
+    #             image.path = str(image_path)
+    #             image.refresh()
+    #         else:
+    #             image.update(str(image_path))
+    #         return
+    #     self.mount(Image(str(image_path), id="preview-image"))
+    #
 
 class PdfGrepApp(App):
     CSS = """
