@@ -43,6 +43,7 @@ Recommended lightweight checks after edits:
 ./pdfgrepui/EasyFindVenv/bin/python -m pdfgrepui -h
 ```
 3. Manual smoke run on a small PDF directory.
+   - Verify `/` opens the in-app search popup, `Enter` reruns search, and `Esc` cancels.
 
 ## Debugging Tips
 - Indexing path:

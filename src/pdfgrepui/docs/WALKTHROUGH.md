@@ -39,6 +39,10 @@ PdfGrepApp._index_documents()
 
 UI navigation
   |
+  +--> `/` opens search overlay input (top-center)
+  |       \-> Enter submits new query -> reindex -> overlay hides
+  |       \-> Esc cancels -> overlay hides
+  |
   +--> app._jump_to_match / _next_page / _previous_page
           |
           +--> renderer.render_page(pdf, page)
@@ -66,9 +70,11 @@ UI navigation
 7. If matches exist, `_jump_to_match(0)` selects first match and `_render_current_page()` renders preview.
 8. `_render_current_page()` calls `render_page(path, page)` from [`renderer.py`](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/renderer.py) and then updates preview image.
 9. Key handlers in `on_key()` drive navigation:
+   - `/` opens a centered search overlay input.
    - Left pane: `j/k` move result cursor, `enter` jumps to selection.
    - Right pane: `j/k` page navigation, `n/N` next/previous match.
-10. `_update_status()` writes current document/page/match/focus info to status line.
+10. Submitting the overlay input (`on_input_submitted`) updates `self.query`, clears current result state, reruns indexing, then hides overlay.
+11. `_update_status()` writes current document/page/match/focus info to status line.
 
 ## Core Data Structures
 - [`models.py`](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/models.py)
