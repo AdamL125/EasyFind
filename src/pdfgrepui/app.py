@@ -243,7 +243,6 @@ class PdfGrepApp(App):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("h", "focus_left", "Focus Left"),
-        ("/", "open_search", "Search"),
     ]
 
     def __init__(
@@ -642,6 +641,10 @@ class PdfGrepApp(App):
             self._semantic_chord_pending = True
             self.status.update("Semantic chord pending: press /")
             return True
+        if key in ("/", "slash"):
+            self._open_search(SearchMode.LITERAL)
+            return True
+
         if key == "m" and self.view_state is ViewState.NORMAL:
             self._mark_pending = "m"
             self.status.update("Mark chord pending: m p l")
@@ -904,20 +907,6 @@ class PdfGrepApp(App):
                 self.status.update(f"Quick access search failed: {exc}")
 
         self._show_input_modal(title, placeholder, initial, help_text, submit)
-
-    def action_open_search(self) -> None:
-        """Show the appropriate search prompt for the current view."""
-        if self._semantic_chord_pending:
-            self._semantic_chord_pending = False
-            self._open_search(SearchMode.SEMANTIC)
-            return
-        if self.view_state is ViewState.QUICK_ACCESS_DOCUMENT:
-            self._open_search(self.quick_access_search_mode if self.quick_access_query else self.default_search_mode)
-            return
-        if self.view_state is ViewState.QUICK_ACCESS_BROWSER:
-            self._open_search(self.quick_access_browser_mode if self.quick_access_browser_query else self.default_search_mode)
-            return
-        self._open_search(self.default_search_mode)
 
     async def _start_search(self) -> None:
         """Clear current state and perform a new search with current query."""
