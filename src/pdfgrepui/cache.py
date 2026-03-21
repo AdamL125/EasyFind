@@ -8,8 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .models import QuickAccessEntry, QuickAccessList
+
 CACHE_ROOT = Path.home() / ".cache" / "pdfgrepui"
 SEMANTIC_SETTINGS_PATH = CACHE_ROOT / "semantic_settings.json"
+QUICK_ACCESS_LISTS_PATH = CACHE_ROOT / "quick_access_lists.json"
 
 
 @dataclass
@@ -104,6 +107,78 @@ def save_semantic_settings(provider: str, model: str) -> None:
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
     payload = {"provider": provider, "model": model}
     SEMANTIC_SETTINGS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def load_quick_access_lists() -> List[QuickAccessList]:
+    """Load persisted quick-access lists."""
+    if not QUICK_ACCESS_LISTS_PATH.exists():
+        return []
+    try:
+        payload = json.loads(QUICK_ACCESS_LISTS_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    lists: List[QuickAccessList] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        list_id = item.get("id")
+        name = item.get("name")
+        raw_entries = item.get("entries", [])
+        if not isinstance(list_id, str) or not isinstance(name, str) or not isinstance(raw_entries, list):
+            continue
+        entries: List[QuickAccessEntry] = []
+        for raw_entry in raw_entries:
+            if not isinstance(raw_entry, dict):
+                continue
+            entry_id = raw_entry.get("id")
+            pdf_path = raw_entry.get("pdf_path")
+            page_number = raw_entry.get("page_number")
+            note = raw_entry.get("note")
+            page_text = raw_entry.get("page_text", "")
+            if (
+                not isinstance(entry_id, str)
+                or not isinstance(pdf_path, str)
+                or not isinstance(page_number, int)
+                or not isinstance(note, str)
+                or not isinstance(page_text, str)
+            ):
+                continue
+            entries.append(
+                QuickAccessEntry(
+                    id=entry_id,
+                    pdf_path=Path(pdf_path),
+                    page_number=page_number,
+                    note=note,
+                    page_text=page_text,
+                )
+            )
+        lists.append(QuickAccessList(id=list_id, name=name, entries=entries))
+    return lists
+
+
+def save_quick_access_lists(lists: List[QuickAccessList]) -> None:
+    """Persist quick-access lists."""
+    CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    payload = [
+        {
+            "id": qa_list.id,
+            "name": qa_list.name,
+            "entries": [
+                {
+                    "id": entry.id,
+                    "pdf_path": str(entry.pdf_path),
+                    "page_number": entry.page_number,
+                    "note": entry.note,
+                    "page_text": entry.page_text,
+                }
+                for entry in qa_list.entries
+            ],
+        }
+        for qa_list in lists
+    ]
+    QUICK_ACCESS_LISTS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def _embedding_cache_key(provider: str, model: str) -> str:

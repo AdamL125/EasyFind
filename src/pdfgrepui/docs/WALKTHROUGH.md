@@ -43,6 +43,11 @@ UI navigation
   |       \-> Enter submits new query -> reindex -> overlay hides
   |       \-> Esc cancels -> overlay hides
   |
+  +--> `lsqa` opens quick-access browser
+  |       \-> Enter opens one quick-access list as a virtual document
+  |       \-> `space a` / `space r` / `space d d` manage quick-access lists
+  |       \-> `mpl` saves the current PDF page into a chosen quick-access list
+  |
   +--> app._jump_to_match / _next_page / _previous_page
           |
           +--> renderer.render_page(pdf, page)
@@ -100,8 +105,10 @@ models -> dataclasses, pathlib
   - Query, root path, regex flag.
   - Current focus, selected match/page/doc indices.
   - Loaded documents and match list.
+  - Quick-access lists, browser filter, opened virtual document, and modal prompt state.
 - Persistent cache config: [`CACHE_ROOT` in cache.py](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/cache.py)
   - Default path: `~/.cache/pdfgrepui`.
+  - Quick-access list persistence: `quick_access_lists.json`.
 
 ## Where I/O Happens
 - Filesystem read/write:

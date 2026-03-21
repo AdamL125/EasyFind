@@ -15,7 +15,7 @@ from .cache import (
     save_meta,
     save_page_embedding,
 )
-from .models import PdfDoc, SearchConfig, SearchMatch, SearchMode
+from .models import PdfDoc, QuickAccessEntry, SearchConfig, SearchMatch, SearchMode
 from .renderer import ensure_render_cache
 from .semantic import EmbeddingProvider, cosine_similarity
 
@@ -105,6 +105,12 @@ def _semantic_rank_score(raw_score: float, text: str) -> float:
     return raw_score
 
 
+def extract_page_text(pdf_path: Path, page_number: int) -> str:
+    """Public helper for loading extracted text for one PDF page."""
+    cache_paths = get_cache_paths(pdf_path)
+    return _extract_page_text(pdf_path, page_number, cache_paths.text_dir)
+
+
 def _get_page_count(pdf_path: Path) -> int:
     """Load or refresh cached PDF metadata and return page count."""
     cache_paths = get_cache_paths(pdf_path)
@@ -138,6 +144,65 @@ def _index_text_matches(pdf_path: Path, search_config: SearchConfig) -> PdfDoc:
             )
     ensure_render_cache(pdf_path, page_count)
     return PdfDoc(path=pdf_path, page_count=page_count, matches=matches)
+
+
+def _quick_access_context(entry: QuickAccessEntry) -> str:
+    """Build list-row context for a saved quick-access entry."""
+    combined = entry.combined_search_text()
+    return combined[:180].strip().replace("\n", " ")
+
+
+def search_quick_access_entries(
+    entries: Sequence[QuickAccessEntry],
+    search_config: SearchConfig,
+    embedding_provider: Optional[EmbeddingProvider] = None,
+    query_embedding: Optional[Sequence[float]] = None,
+) -> List[SearchMatch]:
+    """Search saved quick-access entries by note and cached page text."""
+    if search_config.mode is SearchMode.SEMANTIC:
+        if embedding_provider is None or query_embedding is None:
+            raise ValueError("Semantic quick-access search requires an embedding provider and query embedding")
+        scored_entries: List[Tuple[float, QuickAccessEntry]] = []
+        texts = [entry.combined_search_text() for entry in entries]
+        embeddings = embedding_provider.embed(texts) if texts else []
+        for entry, text, embedding in zip(entries, texts, embeddings):
+            if not text.strip():
+                continue
+            score = _semantic_rank_score(cosine_similarity(query_embedding, embedding), text)
+            if score > 0.0:
+                scored_entries.append((score, entry))
+        scored_entries.sort(key=lambda item: item[0], reverse=True)
+        return [
+            SearchMatch(
+                pdf_path=entry.pdf_path,
+                page_number=entry.page_number,
+                match_index=index,
+                context=_semantic_snippet(entry.combined_search_text(), search_config.query),
+                score=score,
+                source_id=entry.id,
+            )
+            for index, (score, entry) in enumerate(scored_entries, start=1)
+        ]
+
+    matches: List[SearchMatch] = []
+    for entry in entries:
+        text = entry.combined_search_text()
+        if not text:
+            continue
+        spans = _find_matches(text, search_config.query, search_config.mode)
+        if not spans:
+            continue
+        start, end = spans[0]
+        matches.append(
+            SearchMatch(
+                pdf_path=entry.pdf_path,
+                page_number=entry.page_number,
+                match_index=len(matches) + 1,
+                context=_context_snippet(text, start, end),
+                source_id=entry.id,
+            )
+        )
+    return matches
 
 
 def _load_semantic_embeddings(

@@ -44,6 +44,9 @@ Recommended lightweight checks after edits:
 ```
 3. Manual smoke run on a small PDF directory.
    - Verify `/` opens the in-app search popup, `Enter` reruns search, and `Esc` cancels.
+   - Verify `lsqa` opens quick access browser and `Esc` returns to normal search.
+   - Verify `space a`, `space r`, and `space d d` work inside quick access browser.
+   - Verify `mpl` saves the current page to a chosen quick access list with a note.
 
 ## Debugging Tips
 - Indexing path:
@@ -66,6 +69,10 @@ Recommended lightweight checks after edits:
   - Keep candidate prefilter in sync if needed (`search.py`).
 - New output/result formatting:
   - Edit `_populate_results()` and/or `_update_status()` in [`app.py`](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/app.py).
+- New quick access list behavior:
+  - Extend quick-access persistence in [`cache.py`](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/cache.py).
+  - Update quick-access search helpers in [`indexer.py`](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/indexer.py).
+  - Update view state, prompts, and chord handling in [`app.py`](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/app.py).
 - New preview/render backend:
   - Extend or replace `render_page(...)` in [`renderer.py`](/home/adam/Documents/Projects/EasyFind/src/pdfgrepui/renderer.py).
 

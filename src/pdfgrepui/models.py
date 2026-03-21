@@ -16,6 +16,14 @@ class SearchMode(str, Enum):
     SEMANTIC = "semantic"
 
 
+class ViewState(str, Enum):
+    """High-level UI state for normal search and quick-access modes."""
+
+    NORMAL = "normal"
+    QUICK_ACCESS_BROWSER = "quick_access_browser"
+    QUICK_ACCESS_DOCUMENT = "quick_access_document"
+
+
 @dataclass(frozen=True)
 class EmbeddingConfig:
     """Embedding provider settings used for semantic search."""
@@ -35,13 +43,14 @@ class SearchConfig:
 
 @dataclass
 class SearchMatch:
-    """One search hit in a PDF page with lightweight display context."""
+    """One search hit in a PDF page or quick-access entry."""
 
     pdf_path: Path
     page_number: int
     match_index: int
     context: str
     score: Optional[float] = None
+    source_id: Optional[str] = None
 
 
 @dataclass
@@ -51,3 +60,27 @@ class PdfDoc:
     path: Path
     page_count: int
     matches: List[SearchMatch] = field(default_factory=list)
+
+
+@dataclass
+class QuickAccessEntry:
+    """One saved PDF page plus a searchable user note."""
+
+    id: str
+    pdf_path: Path
+    page_number: int
+    note: str
+    page_text: str = ""
+
+    def combined_search_text(self) -> str:
+        """Return text searched when filtering a quick-access entry."""
+        return f"{self.note}\n\n{self.page_text}".strip()
+
+
+@dataclass
+class QuickAccessList:
+    """Persistent named collection of saved PDF pages."""
+
+    id: str
+    name: str
+    entries: List[QuickAccessEntry] = field(default_factory=list)
