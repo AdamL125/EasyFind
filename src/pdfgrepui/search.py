@@ -28,3 +28,10 @@ def find_candidate_pdfs(query: str, root: Path) -> List[Path]:
         raise RuntimeError(f"rga failed: {result.stderr.strip()}")
     paths = [Path(line.strip()) for line in result.stdout.splitlines() if line.strip()]
     return sorted(paths)
+
+
+def find_all_pdfs(root: Path) -> List[Path]:
+    """Return all PDFs under `root` for semantic-search candidate discovery."""
+    if root.is_file():
+        return [root] if root.suffix.lower() == ".pdf" else []
+    return sorted(path for path in root.rglob("*.pdf") if path.is_file())

@@ -6,7 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 CACHE_ROOT = Path.home() / ".cache" / "pdfgrepui"
 
@@ -18,6 +18,7 @@ class CachePaths:
     root: Path
     text_dir: Path
     render_dir: Path
+    embedding_dir: Path
     meta_path: Path
 
 
@@ -36,11 +37,19 @@ def get_cache_paths(pdf_path: Path) -> CachePaths:
     root = CACHE_ROOT / cache_key
     text_dir = root / "texts"
     render_dir = root / "renders"
+    embedding_dir = root / "embeddings"
     meta_path = CACHE_ROOT / "meta" / f"{cache_key}.json"
     text_dir.mkdir(parents=True, exist_ok=True)
     render_dir.mkdir(parents=True, exist_ok=True)
+    embedding_dir.mkdir(parents=True, exist_ok=True)
     meta_path.parent.mkdir(parents=True, exist_ok=True)
-    return CachePaths(root=root, text_dir=text_dir, render_dir=render_dir, meta_path=meta_path)
+    return CachePaths(
+        root=root,
+        text_dir=text_dir,
+        render_dir=render_dir,
+        embedding_dir=embedding_dir,
+        meta_path=meta_path,
+    )
 
 
 def load_meta(meta_path: Path) -> Dict[str, Any]:
@@ -72,3 +81,67 @@ def invalidate_cache(cache_paths: CachePaths) -> None:
     """Delete metadata file for a cached PDF, forcing metadata rebuild next run."""
     if cache_paths.meta_path.exists():
         cache_paths.meta_path.unlink()
+
+
+def _embedding_cache_key(provider: str, model: str) -> str:
+    payload = f"{provider}:{model}".encode("utf-8")
+    return hashlib.sha1(payload).hexdigest()
+
+
+def get_embedding_cache_path(
+    cache_paths: CachePaths,
+    page_number: int,
+    provider: str,
+    model: str,
+) -> Path:
+    """Return cache path for one page embedding and embedding config."""
+    key = _embedding_cache_key(provider, model)
+    return cache_paths.embedding_dir / f"{key}_page_{page_number}.json"
+
+
+def load_page_embedding(
+    cache_paths: CachePaths,
+    pdf_path: Path,
+    page_number: int,
+    provider: str,
+    model: str,
+) -> Optional[List[float]]:
+    """Load one cached page embedding when it matches the current PDF/config."""
+    path = get_embedding_cache_path(cache_paths, page_number, provider, model)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    try:
+        if payload.get("mtime") != pdf_path.stat().st_mtime:
+            return None
+    except FileNotFoundError:
+        return None
+    if payload.get("provider") != provider or payload.get("model") != model:
+        return None
+    embedding = payload.get("embedding")
+    if not isinstance(embedding, list):
+        return None
+    return [float(value) for value in embedding]
+
+
+def save_page_embedding(
+    cache_paths: CachePaths,
+    pdf_path: Path,
+    page_number: int,
+    provider: str,
+    model: str,
+    embedding: List[float],
+) -> None:
+    """Persist one page embedding with the metadata needed for invalidation."""
+    path = get_embedding_cache_path(cache_paths, page_number, provider, model)
+    payload = {
+        "mtime": pdf_path.stat().st_mtime,
+        "provider": provider,
+        "model": model,
+        "page_number": page_number,
+        "embedding": embedding,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
