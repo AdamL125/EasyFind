@@ -10,6 +10,7 @@ from typing import Awaitable, Callable, Dict, List, Optional, Sequence, Tuple
 from uuid import uuid4
 
 import textual_image.renderable  # must be imported before Textual app starts
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
@@ -67,6 +68,14 @@ class PreviewPane(Container):
         img.display = True
 
 
+class PaneDivider(Static):
+    """Thin draggable divider between the left and right panes."""
+
+    def on_mount(self) -> None:
+        """Render a visible grab handle."""
+        self.update("||")
+
+
 class PdfGrepApp(App):
     """Textual app that coordinates indexing, result listing, and page preview."""
 
@@ -82,11 +91,31 @@ class PdfGrepApp(App):
     #results {
         width: 40%;
         border: tall $primary;
+        min-width: 24;
+    }
+
+    #pane-divider {
+        width: 3;
+        min-width: 3;
+        content-align: center middle;
+        color: $text-muted;
+        background: $boost;
+    }
+
+    #pane-divider:hover {
+        color: $text;
+        background: $accent 25%;
+    }
+
+    #pane-divider.-dragging {
+        color: $text;
+        background: $accent;
     }
 
     #preview {
         width: 60%;
         border: tall $primary;
+        min-width: 24;
     }
 
     #preview-image {
@@ -101,6 +130,10 @@ class PdfGrepApp(App):
     }
 
     Screen.fullscreen-preview #results {
+        display: none;
+    }
+
+    Screen.fullscreen-preview #pane-divider {
         display: none;
     }
 
@@ -293,12 +326,15 @@ class PdfGrepApp(App):
         self._delete_pending = False
         self._semantic_chord_pending = False
         self._mark_pending = ""
+        self._left_pane_width_percent = 40.0
+        self._dragging_pane_divider = False
 
     def compose(self) -> ComposeResult:
         """Compose the two-pane layout plus status/footer widgets."""
         yield Header(show_clock=False)
         with Horizontal(id="main"):
             yield self.results_list
+            yield PaneDivider(id="pane-divider")
             yield self.preview
         yield self.status
         yield self.command_bar
@@ -307,9 +343,73 @@ class PdfGrepApp(App):
 
     async def on_mount(self) -> None:
         """Kick off indexing after the UI is mounted."""
+        self._apply_pane_widths()
         self._focus_left()
         self.status.update("Indexing...")
         await self._start_indexing()
+
+    def _apply_pane_widths(self) -> None:
+        """Apply the current split percentage to both panes."""
+        right_width_percent = 100.0 - self._left_pane_width_percent
+        self.results_list.styles.width = f"{self._left_pane_width_percent:.2f}%"
+        self.preview.styles.width = f"{right_width_percent:.2f}%"
+
+    def _resize_panes_from_offset(self, offset_x: int) -> None:
+        """Update pane sizes from a screen-relative x offset."""
+        if self.preview_fullscreen:
+            return
+        main = self.query_one("#main", Horizontal)
+        region = main.region
+        divider = self.query_one("#pane-divider", PaneDivider)
+        divider_width = max(divider.region.width, 1)
+        available_width = max(region.width - divider_width, 1)
+        relative_x = offset_x - region.x
+        if available_width <= 48:
+            left_width = max(1, available_width // 2)
+        else:
+            left_width = max(24, min(relative_x, available_width - 24))
+        self._left_pane_width_percent = (left_width / available_width) * 100.0
+        self._apply_pane_widths()
+
+    def _event_in_divider(self, event: events.MouseEvent) -> bool:
+        """Return True when a mouse event lands inside the divider's region."""
+        divider = self.query_one("#pane-divider", PaneDivider)
+        region = divider.region
+        return (
+            region.x <= event.screen_x < (region.x + region.width)
+            and region.y <= event.screen_y < (region.y + region.height)
+        )
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        """Start dragging when the pane divider is clicked."""
+        if self.preview_fullscreen:
+            return
+        if not self._event_in_divider(event):
+            return
+        divider = self.query_one("#pane-divider", PaneDivider)
+        self._dragging_pane_divider = True
+        divider.add_class("-dragging")
+        self.capture_mouse(divider)
+        self._resize_panes_from_offset(event.screen_x)
+        event.stop()
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        """Resize panes while dragging the divider."""
+        if not self._dragging_pane_divider:
+            return
+        self._resize_panes_from_offset(event.screen_x)
+        event.stop()
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        """Finish divider dragging and release mouse capture."""
+        if not self._dragging_pane_divider:
+            return
+        divider = self.query_one("#pane-divider", PaneDivider)
+        self._dragging_pane_divider = False
+        divider.remove_class("-dragging")
+        self.capture_mouse(None)
+        self._resize_panes_from_offset(event.screen_x)
+        event.stop()
 
     def _current_search_config(self, mode: Optional[SearchMode] = None, query: Optional[str] = None) -> SearchConfig:
         """Return normalized search configuration for the current app state."""
