@@ -43,7 +43,7 @@ UI navigation
   |       \-> Enter submits new query -> reindex -> overlay hides
   |       \-> Esc cancels -> overlay hides
   |
-  +--> `lsqa` opens quick-access browser
+  +--> `space l s q a` opens quick-access browser
   |       \-> Enter opens one quick-access list as a virtual document
   |       \-> `space a` / `space r` / `space d d` manage quick-access lists
   |       \-> `mpl` saves the current PDF page into a chosen quick-access list

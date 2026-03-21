@@ -44,7 +44,7 @@ Recommended lightweight checks after edits:
 ```
 3. Manual smoke run on a small PDF directory.
    - Verify `/` opens the in-app search popup, `Enter` reruns search, and `Esc` cancels.
-   - Verify `lsqa` opens quick access browser and `Esc` returns to normal search.
+   - Verify `space l s q a` opens quick access browser and `Esc` returns to normal search.
    - Verify `space a`, `space r`, and `space d d` work inside quick access browser.
    - Verify `mpl` saves the current page to a chosen quick access list with a note.
 

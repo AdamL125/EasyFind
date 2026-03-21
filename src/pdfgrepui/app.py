@@ -239,9 +239,8 @@ class PdfGrepApp(App):
         self._leader_pending = False
         self._delete_pending = False
         self._semantic_chord_pending = False
-        self._mark_pending = " "
-        self._quick_access_chord = " "
-        self._quick_access_chord_timer = None
+        self._mark_pending = ""
+        self._quick_access_chord = ""
 
     def compose(self) -> ComposeResult:
         """Compose the two-pane layout plus status/footer widgets."""
@@ -411,28 +410,11 @@ class PdfGrepApp(App):
         self._delete_pending = False
         self._semantic_chord_pending = False
         self._mark_pending = ""
-        self._cancel_quick_access_chord()
-
-    def _start_quick_access_chord(self) -> None:
-        """Begin the timed `l s q a` chord without losing `l` focus-right behavior."""
-        self._cancel_quick_access_chord()
-        self._quick_access_chord = " "
-        self._quick_access_chord_timer = self.set_timer(1.65, self._resolve_quick_access_chord_timeout)
-        self.status.update("Quick access chord pending: l s q a")
+        self._quick_access_chord = ""
 
     def _cancel_quick_access_chord(self) -> None:
         """Clear the `l s q a` chord state."""
         self._quick_access_chord = ""
-        timer = self._quick_access_chord_timer
-        self._quick_access_chord_timer = None
-        if timer is not None:
-            timer.stop()
-
-    def _resolve_quick_access_chord_timeout(self) -> None:
-        """Treat a lone `l` as focus-right if the full quick-access chord does not follow."""
-        if self._quick_access_chord == "l":
-            self._cancel_quick_access_chord()
-            self._focus_right()
 
     async def on_key(self, event) -> None:  # type: ignore[override]
         """Handle pane-specific key bindings, mode toggles, and navigation."""
@@ -468,7 +450,7 @@ class PdfGrepApp(App):
             self.status.update("Mark chord pending: m p l")
             return True
         if key == "l":
-            self._start_quick_access_chord()
+            self._focus_right()
             return True
         if key == "f":
             self._set_preview_fullscreen(not self.preview_fullscreen)
@@ -502,6 +484,10 @@ class PdfGrepApp(App):
         """Handle continuation keys for the app's sequential key chords."""
         if self._leader_pending:
             self._leader_pending = False
+            if key == "l":
+                self._quick_access_chord = "l"
+                self.status.update("Quick access chord pending: space l s q a")
+                return "consumed"
             if self.view_state is ViewState.QUICK_ACCESS_BROWSER:
                 if key == "a":
                     self._prompt_create_quick_access_list()
@@ -545,25 +531,25 @@ class PdfGrepApp(App):
             return "reprocess"
 
         if self._quick_access_chord == "l":
-            self._cancel_quick_access_chord()
             if key == "s":
                 self._quick_access_chord = "ls"
                 return "consumed"
-            self._focus_right()
+            self._quick_access_chord = ""
             return "reprocess"
 
         if self._quick_access_chord == "ls":
-            self._quick_access_chord = ""
             if key == "q":
                 self._quick_access_chord = "lsq"
                 return "consumed"
+            self._quick_access_chord = ""
             return "reprocess"
 
         if self._quick_access_chord == "lsq":
-            self._quick_access_chord = ""
             if key == "a":
+                self._quick_access_chord = ""
                 self._enter_quick_access_browser()
                 return "consumed"
+            self._quick_access_chord = ""
             return "reprocess"
 
         return None
