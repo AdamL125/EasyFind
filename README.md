@@ -39,7 +39,7 @@ Global:
 - `l`: focus right pane
 - `/`: open in-app search popup (top-center)
 - `s/`: open semantic search popup
-- `space l s q a`: open quick access lists
+- `:lsqa`: open quick access lists from the command line
 - `Esc`: close popup, leave quick access mode, or exit fullscreen preview
 
 Left pane (results list):
@@ -59,6 +59,12 @@ Search popup:
 
 - `Enter`: run a new search with the input text, then close popup
 - `Esc`: close popup without changing the current search
+
+Command line:
+
+- `:`: open the bottom command line
+- `:lsqa` then `Enter`: open quick access lists
+- `Esc`: close the command line
 
 Quick access browser:
 

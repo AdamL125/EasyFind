@@ -126,6 +126,48 @@ class PdfGrepApp(App):
         border: tall $secondary;
     }
 
+    #command-bar {
+        height: auto;
+        display: none;
+        border-top: tall $accent;
+        background: $surface-darken-1;
+        padding: 0 1;
+    }
+
+    #command-shell {
+        layout: horizontal;
+        width: 100%;
+        height: auto;
+        align-vertical: middle;
+    }
+
+    #command-mode {
+        width: 16;
+        color: $accent;
+        text-style: bold;
+        padding: 0 1 0 0;
+    }
+
+    #command-prompt {
+        width: 3;
+        color: $text;
+        text-style: bold;
+    }
+
+    #command-input {
+        width: 1fr;
+        min-width: 24;
+        color: $text;
+        background: $surface;
+        border: none;
+        padding: 0 1;
+    }
+
+    #command-help {
+        color: $text-muted;
+        padding: 0 0 0 1;
+    }
+
     #modal-overlay {
         layer: overlay;
         width: 100%;
@@ -218,6 +260,16 @@ class PdfGrepApp(App):
         self.results_list = ListView(id="results")
         self.preview = PreviewPane(id="preview")
         self.status = Static(id="status")
+        self.command_bar = Container(
+            Horizontal(
+                Label("COMMAND", id="command-mode"),
+                Label(":", id="command-prompt"),
+                Input(placeholder="lsqa", id="command-input"),
+                Static("Enter executes, Esc cancels", id="command-help"),
+                id="command-shell",
+            ),
+            id="command-bar",
+        )
         self.modal_overlay = Container(
             Container(
                 Label("", id="modal-title"),
@@ -233,6 +285,7 @@ class PdfGrepApp(App):
         self.modal_submit_handler: Optional[SubmitHandler] = None
         self.modal_pick_handler: Optional[PickHandler] = None
         self.modal_restore_focus = "left"
+        self.command_open = False
         self.preview_fullscreen = False
         self._focus_before_fullscreen = "left"
 
@@ -240,7 +293,6 @@ class PdfGrepApp(App):
         self._delete_pending = False
         self._semantic_chord_pending = False
         self._mark_pending = ""
-        self._quick_access_chord = ""
 
     def compose(self) -> ComposeResult:
         """Compose the two-pane layout plus status/footer widgets."""
@@ -249,6 +301,7 @@ class PdfGrepApp(App):
             yield self.results_list
             yield self.preview
         yield self.status
+        yield self.command_bar
         yield self.modal_overlay
         yield Footer()
 
@@ -410,22 +463,63 @@ class PdfGrepApp(App):
         self._delete_pending = False
         self._semantic_chord_pending = False
         self._mark_pending = ""
-        self._quick_access_chord = ""
-
-    def _cancel_quick_access_chord(self) -> None:
-        """Clear the `l s q a` chord state."""
-        self._quick_access_chord = ""
 
     async def on_key(self, event) -> None:  # type: ignore[override]
         """Handle pane-specific key bindings, mode toggles, and navigation."""
         if await self._process_key(event.key):
             event.stop()
 
+    def action_quit(self) -> None:
+        """Ignore quit while text entry UIs are open; otherwise quit normally."""
+        if self.command_open or self.modal_open:
+            return
+        self.exit()
+
+    def _open_command_bar(self) -> None:
+        """Show the bottom command bar with a leading colon prompt."""
+        self._cancel_pending_chords()
+        self.command_open = True
+        self.command_bar.display = True
+        command_input = self.query_one("#command-input", Input)
+        command_input.value = ""
+        command_input.focus()
+        command_input.cursor_position = len(command_input.value)
+
+    def _close_command_bar(self) -> None:
+        """Hide the bottom command bar and restore pane focus."""
+        self.command_open = False
+        self.command_bar.display = False
+        command_input = self.query_one("#command-input", Input)
+        command_input.value = ""
+        if self.focus_pane == "right":
+            self.preview.focus()
+        else:
+            self.results_list.focus()
+        self._update_status()
+
+    async def _execute_command(self, command_text: str) -> None:
+        """Execute one command-line command."""
+        command = command_text.strip()
+        if command.startswith(":"):
+            command = command[1:].strip()
+        if not command:
+            self.status.update("Command cancelled: empty command.")
+            return
+        if command == "lsqa":
+            self._enter_quick_access_browser()
+            return
+        self.status.update(f"Unknown command: {command}")
+
     async def _process_key(self, key: str) -> bool:
         """Process one keypress, including multi-key chord continuations."""
         if self.preview_fullscreen and key == "escape":
             self._set_preview_fullscreen(False)
             return True
+        if self.command_open:
+            if key == "escape":
+                self._close_command_bar()
+                return True
+            return False
         if self.modal_open:
             return await self._handle_modal_key(key)
         if key == "escape" and self.view_state is not ViewState.NORMAL:
@@ -440,6 +534,9 @@ class PdfGrepApp(App):
         if key == "space":
             self._leader_pending = True
             self.status.update("Leader pending")
+            return True
+        if key in (":", "colon"):
+            self._open_command_bar()
             return True
         if key == "s":
             self._semantic_chord_pending = True
@@ -484,10 +581,6 @@ class PdfGrepApp(App):
         """Handle continuation keys for the app's sequential key chords."""
         if self._leader_pending:
             self._leader_pending = False
-            if key == "l":
-                self._quick_access_chord = "l"
-                self.status.update("Quick access chord pending: space l s q a")
-                return "consumed"
             if self.view_state is ViewState.QUICK_ACCESS_BROWSER:
                 if key == "a":
                     self._prompt_create_quick_access_list()
@@ -528,28 +621,6 @@ class PdfGrepApp(App):
             if key == "l":
                 await self._prompt_save_current_page()
                 return "consumed"
-            return "reprocess"
-
-        if self._quick_access_chord == "l":
-            if key == "s":
-                self._quick_access_chord = "ls"
-                return "consumed"
-            self._quick_access_chord = ""
-            return "reprocess"
-
-        if self._quick_access_chord == "ls":
-            if key == "q":
-                self._quick_access_chord = "lsq"
-                return "consumed"
-            self._quick_access_chord = ""
-            return "reprocess"
-
-        if self._quick_access_chord == "lsq":
-            if key == "a":
-                self._quick_access_chord = ""
-                self._enter_quick_access_browser()
-                return "consumed"
-            self._quick_access_chord = ""
             return "reprocess"
 
         return None
@@ -651,6 +722,11 @@ class PdfGrepApp(App):
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Submit overlay input to its registered handler."""
+        if event.input.id == "command-input":
+            command = event.value
+            self._close_command_bar()
+            await self._execute_command(command)
+            return
         if event.input.id != "modal-input":
             return
         if self.modal_submit_handler is None:
