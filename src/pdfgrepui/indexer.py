@@ -95,6 +95,16 @@ def _semantic_snippet(text: str, query: str, radius: int = 180) -> str:
     return best[:radius].strip()
 
 
+def _semantic_rank_score(raw_score: float, text: str) -> float:
+    """Down-rank very short pages so titles and name-only pages score lower."""
+    word_count = len(re.findall(r"\w+", text))
+    if word_count <= 0:
+        return 0.0
+    if word_count < 10:
+        return raw_score * max(word_count / 10.0, 0.1)
+    return raw_score
+
+
 def _get_page_count(pdf_path: Path) -> int:
     """Load or refresh cached PDF metadata and return page count."""
     cache_paths = get_cache_paths(pdf_path)
@@ -183,7 +193,7 @@ def _index_semantic_matches(
     for page_number, text, embedding in zip(range(1, page_count + 1), page_texts, page_embeddings):
         if not text.strip():
             continue
-        score = cosine_similarity(query_embedding, embedding)
+        score = _semantic_rank_score(cosine_similarity(query_embedding, embedding), text)
         if score > 0.0:
             scored_pages.append((score, page_number, text))
     scored_pages.sort(reverse=True)

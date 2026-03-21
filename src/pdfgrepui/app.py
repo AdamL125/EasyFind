@@ -13,6 +13,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Footer, Header, Input, Label, ListItem, ListView, Static
 from textual_image.widget import Image
 
+from .cache import load_semantic_settings, save_semantic_settings
 from .indexer import index_pdf
 from .models import EmbeddingConfig, PdfDoc, SearchConfig, SearchMatch, SearchMode
 from .renderer import render_page
@@ -152,7 +153,13 @@ class PdfGrepApp(App):
         self.default_search_mode = SearchMode.REGEX if regex else SearchMode.LITERAL
         self.active_search_mode = initial_mode
         self.overlay_search_mode = initial_mode
-        self.embedding_config = embedding_config or EmbeddingConfig()
+        if embedding_config is None:
+            persisted = load_semantic_settings()
+            embedding_config = EmbeddingConfig(
+                provider=persisted.get("provider", "ollama"),
+                model=persisted.get("model", ""),
+            )
+        self.embedding_config = embedding_config
         self.focus_pane = "left"
         self.documents: List[PdfDoc] = []
         self.matches: List[SearchMatch] = []
@@ -217,7 +224,7 @@ class PdfGrepApp(App):
         search_config = self._current_search_config()
         if search_config.mode is SearchMode.SEMANTIC:
             if not self.embedding_config.model:
-                raise ValueError("Semantic search requires --set-embedding-model")
+                raise ValueError("Semantic search requires a saved embedding model or --set-embedding-model")
             provider = build_embedding_provider(search_config.embedding)
             query_embeddings = provider.embed([search_config.query])
             if not query_embeddings:
@@ -305,12 +312,8 @@ class PdfGrepApp(App):
                 event.stop()
             return
         if self._semantic_chord_pending:
-            if event.key in ("/", "slash"):
+            if event.key not in ("/", "slash"):
                 self._semantic_chord_pending = False
-                self._open_search(SearchMode.SEMANTIC)
-                event.stop()
-                return
-            self._semantic_chord_pending = False
         if event.key == "s":
             self._semantic_chord_pending = True
             self.status.update("Semantic chord pending: press /")
@@ -318,10 +321,6 @@ class PdfGrepApp(App):
             return
         if event.key == "f":
             self._set_preview_fullscreen(not self.preview_fullscreen)
-            event.stop()
-            return
-        if event.key in ("/", "slash"):
-            self.action_open_search()
             event.stop()
             return
         if event.key == "enter" and self.focus_pane == "left":
@@ -373,6 +372,10 @@ class PdfGrepApp(App):
 
     def action_open_search(self) -> None:
         """Show the default non-semantic search overlay."""
+        if self._semantic_chord_pending:
+            self._semantic_chord_pending = False
+            self._open_search(SearchMode.SEMANTIC)
+            return
         self._open_search(self.default_search_mode)
 
     def _hide_search_overlay(self) -> None:
@@ -570,12 +573,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("-s", "--semantic", action="store_true", help="Use semantic embedding search")
     parser.add_argument(
         "--set-embedding-provider",
-        default="ollama",
-        help="Embedding provider to use for semantic search (default: ollama)",
+        default=None,
+        help="Embedding provider to use for semantic search",
     )
     parser.add_argument(
         "--set-embedding-model",
-        default="",
+        default=None,
         help="Embedding model name for semantic search",
     )
     args = parser.parse_args()
@@ -588,14 +591,19 @@ def main() -> None:
     """CLI entrypoint: parse args, build app, and run Textual event loop."""
     args = parse_args()
     initial_mode = SearchMode.SEMANTIC if args.semantic else SearchMode.REGEX if args.regex else SearchMode.LITERAL
+    persisted = load_semantic_settings()
+    provider = args.set_embedding_provider or persisted.get("provider", "ollama")
+    model = args.set_embedding_model or persisted.get("model", "")
+    if args.set_embedding_provider is not None or args.set_embedding_model is not None:
+        save_semantic_settings(provider, model)
     app = PdfGrepApp(
         args.query,
         Path(args.path),
         args.regex,
         initial_mode=initial_mode,
         embedding_config=EmbeddingConfig(
-            provider=args.set_embedding_provider,
-            model=args.set_embedding_model,
+            provider=provider,
+            model=model,
         ),
     )
     app.run()

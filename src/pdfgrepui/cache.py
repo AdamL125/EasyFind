@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 CACHE_ROOT = Path.home() / ".cache" / "pdfgrepui"
+SEMANTIC_SETTINGS_PATH = CACHE_ROOT / "semantic_settings.json"
 
 
 @dataclass
@@ -81,6 +82,28 @@ def invalidate_cache(cache_paths: CachePaths) -> None:
     """Delete metadata file for a cached PDF, forcing metadata rebuild next run."""
     if cache_paths.meta_path.exists():
         cache_paths.meta_path.unlink()
+
+
+def load_semantic_settings() -> Dict[str, str]:
+    """Load persisted semantic-search provider/model settings."""
+    if not SEMANTIC_SETTINGS_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(SEMANTIC_SETTINGS_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    provider = payload.get("provider")
+    model = payload.get("model")
+    if not isinstance(provider, str) or not isinstance(model, str):
+        return {}
+    return {"provider": provider, "model": model}
+
+
+def save_semantic_settings(provider: str, model: str) -> None:
+    """Persist semantic-search provider/model settings for future runs."""
+    CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+    payload = {"provider": provider, "model": model}
+    SEMANTIC_SETTINGS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 def _embedding_cache_key(provider: str, model: str) -> str:
